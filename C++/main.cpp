@@ -16,8 +16,14 @@ char nums[2] = { '0', '1' };
 #define dataArrayLength ((data_length + NUM_BITS - 1) / NUM_BITS)
 #define resultArrayLength ((data_length * NUM_FILTERS + NUM_BITS - 1) / NUM_BITS)
 
-void printBitString(const unsigned int *data, int length);
-
+void printBitString(const unsigned int *data, int length) {
+    for (int i = 0; i < length; i++) {
+        for (int j = 0; j < NUM_BITS; j++) {
+            cout << nums[(data[i] >> (NUM_BITS - 1 - j)) & 1];
+        }
+    }
+    cout << endl;
+}
 
 // This function is specifically structured to mimic the execution of a CUDA kernel,
 // which is why the entire operation is contained in two for loops.
@@ -53,15 +59,6 @@ void convEncode(const unsigned int *data, unsigned int *output) {
             }
         }
     }
-}
-
-void printBitString(const unsigned int *data, int length) {
-    for (int i = 0; i < length; i++) {
-        for (int j = 0; j < NUM_BITS; j++) {
-            cout << nums[(data[i] >> (NUM_BITS - 1 - j)) & 1];
-        }
-    }
-    cout << endl;
 }
 
 
