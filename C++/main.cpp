@@ -1,10 +1,14 @@
 #include <iostream>
+#include <time.h>
+#include <chrono>
+#include <cstring>
 
 using namespace std;
 
 #define NUM_BITS (8 * sizeof(unsigned int))
 
-const unsigned int data_length = 64;
+unsigned int data_length = (1 << 23);
+const unsigned int fillVal = 0x0F0F0F0F;
 
 //const unsigned int THREADS = 256;
 const unsigned int FILTER_LENGTH = 3;
@@ -62,13 +66,64 @@ void convEncode(const unsigned int *data, unsigned int *output) {
 }
 
 
-int main() {
-    unsigned int input[dataArrayLength] = {0xFFFFFFFF, 0xFFFFFFFF};
-    unsigned int output[resultArrayLength];
+long long runTest(unsigned int length)  {
+    data_length = length;
 
-    for (unsigned int &i : output) { i = 0; }
+    unsigned int *input;
+    unsigned int *output;
+
+    input = (unsigned int*)(malloc(dataArrayLength * sizeof(unsigned int)));
+    output = (unsigned int*)(malloc(resultArrayLength * sizeof(unsigned int)));
+
+    for (unsigned int i = 0; i < dataArrayLength; i++)   { input[i] = fillVal; }
+    for (unsigned int i = 0; i < resultArrayLength; i++) { output[i] = 0; }
+
+    auto start = chrono::high_resolution_clock::now();
 
     convEncode(input, output);
-    printf("%x\n%x\n", output[0], output[1]);
-    printBitString(output, resultArrayLength);
+
+    auto ends = chrono::high_resolution_clock::now();
+
+    long long cpu_time_used = chrono::duration_cast<chrono::microseconds>(ends - start).count();
+
+    return cpu_time_used;
+}
+
+
+int main() {
+    unsigned int *input;
+    unsigned int *output;
+
+    input = (unsigned int*)(malloc(dataArrayLength * sizeof(unsigned int)));
+    output = (unsigned int*)(malloc(resultArrayLength * sizeof(unsigned int)));
+
+    memset(input, fillVal, sizeof(unsigned int) * dataArrayLength);
+    memset(output, 0, sizeof(unsigned int) * resultArrayLength);
+
+//    for (unsigned int i = 0; i < dataArrayLength; i++)   { input[i] = fillVal; }
+//    for (unsigned int i = 0; i < resultArrayLength; i++) { output[i] = 0; }
+
+    long long times[32];
+    for (unsigned int i = 0; i < 32; i ++)   {
+        times[i] = runTest((unsigned int)(1 << i));
+        printf("%d,%lld\n", 1 << i, times[i]);
+    }
+
+
+
+//    chrono::time_point<chrono::high_resolution_clock> start = chrono::high_resolution_clock::now();
+//
+//    convEncode(input, output);
+//
+//    chrono::time_point<chrono::high_resolution_clock> ends = chrono::high_resolution_clock::now();
+//
+//    long long cpu_time_used = chrono::duration_cast<chrono::microseconds>(ends - start).count(); //((double)(end - start)) / (CLOCKS_PER_SEC / 1e6);
+//
+////    printf("%d\n", CLOCKS_PER_SEC);
+////    printf("Execution required %lld us\n", cpu_time_used);
+//
+//    printf("%d,%lld", data_length, cpu_time_used);
+
+//    printf("%x\n%x\n", output[0], output[1]);
+//    printBitString(output, resultArrayLength);
 }

@@ -37,13 +37,13 @@ using namespace std;
 
 // Constants defined for encoding
 unsigned int data_length = 256;
-unsigned int messageLen = data_length;
 const unsigned int THREADS = 256;
 const unsigned int FILTER_LENGTH = 3;
 const unsigned int NUM_FILTERS = 2;
 const unsigned int FILTERS = (0b111 << 3) | (0b011);
 
 // misc global data
+const int test_iters = 1;
 char nums[2] = { '0', '1' };
 
 
@@ -115,8 +115,8 @@ int hex2int(char ch) {
 }
 
 unsigned int* loadInpData(const char *inp) {
-	messageLen = strlen(inp) * 4;
-//	printf("Message length: %d\n", messageLen);
+	int messageLen = strlen(inp);
+	printf("Message length: %d", messageLen);
 	unsigned int *data = (unsigned int*)(malloc(messageLen));
 	for (int i = 0; i < messageLen; i++) {
 		data[i / (sizeof(unsigned int) / sizeof(char))] <<= 8;
@@ -126,16 +126,46 @@ unsigned int* loadInpData(const char *inp) {
 	return data;
 }
 
+long long runTest(unsigned long length, unsigned int fill, unsigned int numIters) {
+	unsigned int *A, *B;
+
+	CUDACHECK(cudaMallocManaged(&A, ((length + NUM_BITS - 1) / NUM_BITS) * sizeof(unsigned int)));
+	CUDACHECK(cudaMallocManaged(&B, ((length * NUM_FILTERS + NUM_BITS - 1) / NUM_BITS) * sizeof(unsigned int)));
+
+	CUDACHECK(cudaMemset(A, fill, ((length + NUM_BITS - 1) / NUM_BITS) * sizeof(unsigned int)));
+	CUDACHECK(cudaMemset(B, 0, ((length * NUM_FILTERS + NUM_BITS - 1) / NUM_BITS) * sizeof(unsigned int)));
+
+	auto start = chrono::high_resolution_clock::now();
+
+	for (unsigned int j = 0; j < numIters; j++) {
+		// This macro is used because the compiler throws a compile error when trying to parse 
+		// the correct CUDA kernel syntax
+		convEncode KERNEL_ARGS2((length + THREADS - 1) / THREADS, THREADS) (A, B);
+
+		CUDACHECK(cudaDeviceSynchronize());
+	}
+
+	auto end = chrono::high_resolution_clock::now();
+
+	long long elapsed_time = chrono::duration_cast<chrono::microseconds>(end - start).count();
+
+	cudaFree(A);
+	cudaFree(B);
+
+	return elapsed_time;
+}
+
 /**
  * When called from the command line, the following arguments can be passed:
- * -m -- Use user provided data. Data should immediately follow the flag and should be in hex format (without leading "0x").
+ * -t -- Flag to indicate the code should execute a performance test. Any arguments following this flag will be ignored
+ * -m -- Use user provided data. Data should immediately follow the flag and should be in hex format.
  * -l -- Specifies a custom message length, in bits. If the -m flag is also used, this will have no effect.
  * -f -- Specifies the 32 bit value to fill the input array with. All formats accepted, with appropriate prefix (0b, 0x, etc.)
  * 		 If -m flag is set, has no effect.
  */
 int main(int argc, char *argv[]) {
 	unsigned int fillVal = 0xFFFFFFFF;
-	bool useProvidedData = false;
+	bool useProvidedData = false, runtest = false;
 	unsigned int *data;
 
 	// Parse command line arguments
@@ -163,6 +193,11 @@ int main(int argc, char *argv[]) {
 						useProvidedData = true;
 					}
 					break;
+				case 't':
+				case 'T':
+					i = argc;
+					useProvidedData = false, runtest = true;
+					break;
 				default:
 					printf("Invalid argument: %s", argv[i]);
 					exit(1);
@@ -184,17 +219,37 @@ int main(int argc, char *argv[]) {
 	}
 	CUDACHECK(cudaMemset(B, 0, resultArrayLength * sizeof(unsigned int)));
 
+	// Run the kernel once to reduce timing errors from initial run
+	convEncode KERNEL_ARGS2((data_length + THREADS - 1) / THREADS, THREADS) (A, B);
+	CUDACHECK(cudaDeviceSynchronize());
+
+	if (runtest) {
+		long long times[31];
+		for (int j = 0; j < test_iters; j++) {
+			for (int i = 0; i < 31; i++) {
+				if (j == 0) { times[i] = 0; }
+				times[i] += runTest(1 << i, fillVal, 1);
+			}
+		}
+		for (int i = 0; i < 31; i++) {
+			printf("%d,%lld\n", 1 << i, times[i] / test_iters);
+		}
+		return 0;
+	}
+
+	auto start = chrono::high_resolution_clock::now();
+
 	// This macro is used because the compiler throws a compile error when trying to parse 
 	// the correct CUDA kernel syntax
 	convEncode KERNEL_ARGS2((data_length + THREADS - 1) / THREADS, THREADS) (A, B);
 
 	CUDACHECK(cudaDeviceSynchronize());
 
-	printf("0x");
-	for (int i = 0; i < resultArrayLength; i++)	{
-		printf("%x", B[i]);
-	}
-	printf("\n");
+	auto end = chrono::high_resolution_clock::now() - start;
+
+	long long elapsed_time = chrono::duration_cast<chrono::microseconds>(end).count();
+
+	printf("Elapsed time %lld \u03bcs\n", elapsed_time);
 
 	cudaFree(A);
 	cudaFree(B);
