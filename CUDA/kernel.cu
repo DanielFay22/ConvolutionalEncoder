@@ -41,7 +41,7 @@ unsigned int messageLen = data_length;
 const unsigned int THREADS = 256;
 const unsigned int FILTER_LENGTH = 3;
 const unsigned int NUM_FILTERS = 2;
-const unsigned int FILTERS = (0b111 << 3) | (0b011);
+const unsigned long long FILTERS = (0b111 << 3) | (0b011);
 
 // misc global data
 char nums[2] = { '0', '1' };
@@ -62,14 +62,12 @@ void convEncode(const unsigned int *data, unsigned int *output) {
 
 	bits[idx] = 0;
 
-	__syncthreads();
-
 #pragma unroll
 	// Each thread evaluates all of the filters on its data
 	for (unsigned int i = 0; i < NUM_FILTERS; i++) {
 
-		unsigned int n = val & ((FILTERS >> ((NUM_FILTERS - i - 1) * FILTER_LENGTH))
-			& ((1 << FILTER_LENGTH) - 1));
+		unsigned int n = val & ((unsigned int)((FILTERS >> ((NUM_FILTERS - i - 1) * FILTER_LENGTH))
+			& ((1 << FILTER_LENGTH) - 1)));
 
 		n ^= n >> 1;                            // Parity of pairs of bits
 		n ^= n >> 2;                            // Parity of every 4 bits
@@ -95,7 +93,6 @@ void convEncode(const unsigned int *data, unsigned int *output) {
 }
 
 void printBitString(const unsigned int *data, int length) {
-	//ostringstream strStream;
 	for (int i = 0; i < length; i++) {
 		for (int j = 0; j < NUM_BITS; j++) {
 			cout << nums[(data[i] >> (NUM_BITS - j)) & 1];
@@ -139,11 +136,9 @@ int main(int argc, char *argv[]) {
 	unsigned int *data;
 
 	// Parse command line arguments
-	// Usage:
 	if (argc > 1) {
 		for (int i = 1; i < argc; i++) {
 			if (argv[i][0] == '-') {
-				//printf("%c\t%d\t%d\n", argv[i][1], i, argv[i][1] == 'l');
 				switch (argv[i][1]) {
 				case 'L':
 				case 'l': 

@@ -40,7 +40,7 @@ unsigned int data_length = 256;
 const unsigned int THREADS = 256;
 const unsigned int FILTER_LENGTH = 3;
 const unsigned int NUM_FILTERS = 2;
-const unsigned int FILTERS = (0b111 << 3) | (0b011);
+const unsigned long long FILTERS = (0b111 << 3) | (0b011);
 
 // misc global data
 const int test_iters = 1;
@@ -62,14 +62,12 @@ void convEncode(const unsigned int *data, unsigned int *output) {
 
 	bits[idx] = 0;
 
-	__syncthreads();
-
 #pragma unroll
 	// Each thread evaluates all of the filters on its data
 	for (unsigned int i = 0; i < NUM_FILTERS; i++) {
 
-		unsigned int n = val & ((FILTERS >> ((NUM_FILTERS - i - 1) * FILTER_LENGTH))
-			& ((1 << FILTER_LENGTH) - 1));
+		unsigned int n = val & ((unsigned int)((FILTERS >> ((NUM_FILTERS - i - 1) * FILTER_LENGTH))
+				& ((1 << FILTER_LENGTH) - 1)));
 
 		n ^= n >> 1;                            // Parity of pairs of bits
 		n ^= n >> 2;                            // Parity of every 4 bits
@@ -95,7 +93,6 @@ void convEncode(const unsigned int *data, unsigned int *output) {
 }
 
 void printBitString(const unsigned int *data, int length) {
-	//ostringstream strStream;
 	for (int i = 0; i < length; i++) {
 		for (int j = 0; j < NUM_BITS; j++) {
 			cout << nums[(data[i] >> (NUM_BITS - j)) & 1];
@@ -127,12 +124,17 @@ unsigned int* loadInpData(const char *inp) {
 }
 
 long long runTest(unsigned long length, unsigned int fill, unsigned int numIters) {
-	unsigned int *A, *B;
+	unsigned int *A, *B, *C;
+
+	C = (unsigned int*)(malloc(sizeof(unsigned int) * dataArrayLength));
+	memset(C, fill, sizeof(unsigned int) * dataArrayLength);
 
 	CUDACHECK(cudaMallocManaged(&A, ((length + NUM_BITS - 1) / NUM_BITS) * sizeof(unsigned int)));
 	CUDACHECK(cudaMallocManaged(&B, ((length * NUM_FILTERS + NUM_BITS - 1) / NUM_BITS) * sizeof(unsigned int)));
 
-	CUDACHECK(cudaMemset(A, fill, ((length + NUM_BITS - 1) / NUM_BITS) * sizeof(unsigned int)));
+//	CUDACHECK(cudaMemset(A, fill, ((length + NUM_BITS - 1) / NUM_BITS) * sizeof(unsigned int)));
+	memcpy(A, C, sizeof(unsigned int) * dataArrayLength);
+
 	CUDACHECK(cudaMemset(B, 0, ((length * NUM_FILTERS + NUM_BITS - 1) / NUM_BITS) * sizeof(unsigned int)));
 
 	auto start = chrono::high_resolution_clock::now();
